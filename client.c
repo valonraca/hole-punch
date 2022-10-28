@@ -10,7 +10,6 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
@@ -22,6 +21,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 /**
  * This client connects to the address and port of the server. It proceeds to
@@ -29,7 +29,7 @@
  * to the relay server.
  */
 int main(int argc, char **argv) {
-    if (argc != 4) {
+    if (argc != 5) {
         fprintf(stderr, "Usage: %s addr port passes\n", basename(argv[0]));
         return 1;
     }
@@ -148,19 +148,18 @@ int main(int argc, char **argv) {
 
         real_passes++;
     }
-
-    for ( ; iter < real_passes; iter++) {
-        if (iter % 2 == 0) {
-            uint32_t pass_buf;
-            /* Keep Valgrind happy */
-            pass_buf = 0;
-
+    int side;
+    ret = sscanf(argv[4], "%d", &side);
+    while(1) {
+        
+        if( side == 0 ) {
             socklen_t len   = sizeof(remote);
             /**
              * If we do not have the remote client information yet, note it
              * when the client receives a packet.
              */
-            recvret = recvfrom(fd, &pass_buf, sizeof(pass_buf), MSG_TRUNC,
+            char buffer;
+            recvret = recvfrom(fd, &buffer, sizeof(buffer), MSG_TRUNC,
                 remote_set ? NULL : &remote,
                 remote_set ? NULL : &len);
             if (sizeof(remote) < len) {
@@ -169,26 +168,95 @@ int main(int argc, char **argv) {
             } else if (recvret < 0) {
                 fprintf(stderr, "Error on recvfrom.  errno %d\n", errno);
                 return 9;
-            } else if (recvret != sizeof(pass_buf)) {
+            } else if (recvret != sizeof(buffer)) {
                 fprintf(stderr, "Unexpected message size: %u\n", len);
                 return 9;
             }
 
             remote_set = 1;
-            printf("Received '%u'\n", ntohl(pass_buf));
-        } else {
-            /* Send the current iteration number */
-            assert(remote_set);
-            uint32_t pass_buf = htonl((uint32_t) iter / 2);
+            printf("%c", buffer);
+        }
+        else if( side == 1 ) {
+            //assert(remote_set);
+            //uint32_t pass_buf = htonl((uint32_t) iter / 2);
+            // char buffer[1000];
+            // if (fgets(buffer, 256, stdin) != NULL) {
+            //     printf ("Your address is: %s\n", buffer);
+            // }
+            // else {
+            //     printf ("Error reading from stdin!\n");
+            // }
 
-            sendret = sendto(fd, &pass_buf, sizeof(pass_buf), 0, &remote,
+            int i, num;
+
+            char block[1];
+
+            while ((num = fread(block, 1, 1, stdin)) == 1)
+            {
+               // for(i = 0; i < 1; i++)
+                {
+                    printf("%c", block[0]);
+                
+                sendret = sendto(fd, &block[0], sizeof(block[0]), 0, &remote,
                 sizeof(remote));
-            if (sendret < 0) {
-                fprintf(stderr, "Error on sendto. errno %d\n", errno);
-                return 10;
+                if (sendret < 0) {
+                    fprintf(stderr, "Error on sendto. errno %d\n", errno);
+                    return 10;
+                }
+                }
             }
+            
         }
     }
+    // for ( ; iter < real_passes; iter++) {
+    //     if (iter % 2 == 0) {
+    //         uint32_t pass_buf;
+    //         /* Keep Valgrind happy */
+    //         pass_buf = 0;
+
+    //         socklen_t len   = sizeof(remote);
+    //         /**
+    //          * If we do not have the remote client information yet, note it
+    //          * when the client receives a packet.
+    //          */
+    //         char buffer[256];
+    //         recvret = recvfrom(fd, &buffer, sizeof(buffer), MSG_TRUNC,
+    //             remote_set ? NULL : &remote,
+    //             remote_set ? NULL : &len);
+    //         if (sizeof(remote) < len) {
+    //             fprintf(stderr, "Unsufficent buffer space for address.\n");
+    //             return 9;
+    //         } else if (recvret < 0) {
+    //             fprintf(stderr, "Error on recvfrom.  errno %d\n", errno);
+    //             return 9;
+    //         } else if (recvret != sizeof(buffer)) {
+    //             fprintf(stderr, "Unexpected message size: %u\n", len);
+    //             return 9;
+    //         }
+
+    //         remote_set = 1;
+    //         printf("Received '%s'\n", buffer);
+    //     } else {
+    //         /* Send the current iteration number */
+    //         assert(remote_set);
+    //         uint32_t pass_buf = htonl((uint32_t) iter / 2);
+    //         char buffer[256];
+    //         printf ("Insert your full address: ");
+    //         if (fgets(buffer, 256, stdin) != NULL) {
+    //             printf ("Your address is: %s\n", buffer);
+    //         }
+    //         else {
+    //             printf ("Error reading from stdin!\n");
+    //         }
+    //         sendret = sendto(fd, &buffer, sizeof(buffer), 0, &remote,
+    //             sizeof(remote));
+    //         if (sendret < 0) {
+    //             fprintf(stderr, "Error on sendto. errno %d\n", errno);
+    //             return 10;
+    //         }
+    //         usleep(1000000);
+    //     }
+    // }
 
     return 0;
 }
